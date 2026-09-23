@@ -3,6 +3,7 @@ package com.example.binauralbeats
 import android.content.*
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
@@ -19,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     private var playbackService: PlaybackService? = null
     private var isBound = false
     private val activeAmbientSounds = mutableSetOf<Int>()
+    private val pendingAmbientSounds = mutableSetOf<Int>()
 
     // Visualizer Listener directo (0 overhead IPC)
     private val visualizerListener = object : PlaybackService.VisualizerListener {
@@ -44,6 +46,14 @@ class MainActivity : AppCompatActivity() {
             playbackService = binder.getService()
             isBound = true
             playbackService?.setVisualizerListener(visualizerListener)
+
+            // Procesar sonidos ambientales pendientes al conectar
+            if (pendingAmbientSounds.isNotEmpty()) {
+                pendingAmbientSounds.forEach { soundResId ->
+                    playbackService?.toggleAmbientSound(soundResId)
+                }
+                pendingAmbientSounds.clear()
+            }
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -106,6 +116,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         Intent(this, PlaybackService::class.java).also { intent ->
+            startService(intent)
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
         val intentFilter = IntentFilter().apply {
@@ -204,6 +215,7 @@ class MainActivity : AppCompatActivity() {
             binding.visualizerView.clearVisualizer()
             updateCountdownUI(0)
             activeAmbientSounds.clear()
+            pendingAmbientSounds.clear()
             updateAllAmbientButtonUI()
         }
 
@@ -272,14 +284,18 @@ class MainActivity : AppCompatActivity() {
             bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
 
-        playbackService?.toggleAmbientSound(soundResId)
-
         if (activeAmbientSounds.contains(soundResId)) {
             activeAmbientSounds.remove(soundResId)
         } else {
             activeAmbientSounds.add(soundResId)
         }
         updateAmbientButtonUI(soundResId, button)
+
+        if (playbackService != null) {
+            playbackService?.toggleAmbientSound(soundResId)
+        } else {
+            pendingAmbientSounds.add(soundResId)
+        }
     }
 
     private fun updateAmbientButtonUI(soundResId: Int, button: ImageView) {

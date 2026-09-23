@@ -1,28 +1,37 @@
-# Binaural Beats - Aplicación para Android (Versión Beta)
+# Binaural Beats - Aplicación para Android (v1.2 BETA)
 
-**Binaural Beats** es una aplicación de Android diseñada para la meditación, la concentración y la relajación mediante la reproducción de ondas binaurales y frecuencias Solfeggio. La aplicación permite a los usuarios seleccionar diferentes tipos de frecuencias según sus necesidades, combinar los sonidos con pistas de ambiente y controlar la reproducción de forma sencilla.
+**Binaural Beats** es una aplicación de Android diseñada para la meditación, la concentración y la relajación mediante la generación en tiempo real de ondas binaurales y frecuencias Solfeggio. Permite a los usuarios seleccionar diferentes frecuencias según sus necesidades cognitivas o de descanso, combinar los tonos con sonidos ambientales relajantes y personalizar cada sesión.
 
-## 🚧 Estado del Proyecto
+---
 
-Esta aplicación se encuentra actualmente en **versión beta**. Continuamos desarrollando nuevas funcionalidades y realizando mejoras.
+## 🚀 Novedades en la versión 1.2 BETA
+
+* 🎨 **Rediseño UI en Material 3 (Glassmorphic Dark Theme)**: Nueva interfaz estructurada en tarjetas elegantes (`MaterialCardView`) con tonos oscuros místicos (`#12141C` y `#1E2230`).
+* 🌈 **Colores Dinámicos por Tipo de Onda**: El visualizador cambia de color automáticamente según la categoría seleccionada (Delta, Theta, Alpha, Beta, Gamma o Solfeggio).
+* 🌊 **Visualizador Ultra-Fluido a 60 FPS**: Renderizado de curvas Bézier suavizadas con relleno degradado sin sobrecargar la memoria de la UI (0 GC allocations en `onDraw`).
+* 🎚️ **Mezclador Ambiental Pro con Volúmenes Independientes**: Control deslizante (`Slider`) de volumen individual para **Lluvia, Fuego y Bosque**.
+* ⚡ **Arquitectura de Audio Optimizada**: Comunicación de alta velocidad entre el `PlaybackService` y la interfaz mediante callbacks directos (IPC-free `VisualizerListener`) y corrección de fase armónica.
+* 📱 **Nuevos Desplegables Material 3**: Eliminación del bloqueo de filtrado en menús emergentes (`MaterialAutoCompleteTextView`).
+
+---
 
 ## ✨ Características Principales
 
-*   **🎶 Selección de Frecuencias:** Ofrece dos categorías principales:
-    *   **Ondas Binaurales:** Incluye Delta, Theta, Alpha, Beta y Gamma, cada una asociada a diferentes estados mentales (sueño profundo, relajación, concentración, etc.).
-    *   **Frecuencias Solfeggio:** Incluye frecuencias como 174 Hz, 528 Hz ("frecuencia del amor"), 396 Hz, entre otras, conocidas por sus beneficios a nivel energético y emocional.
-*   **ℹ️ Información Detallada:** Muestra una descripción completa de los beneficios y usos de cada frecuencia seleccionada.
-*   **🍃 Sonidos de Ambiente:** Permite superponer sonidos relajantes de **lluvia, fuego y bosque** a la frecuencia principal, con un control de volumen independiente.
-*   **⏱️ Temporizador:** Incluye opciones de temporizador para programar la duración de la sesión de escucha (5, 10, 30 minutos, 1 hora o sin límite).
-*   **🌊 Visualizador de Ondas:** Muestra una representación gráfica de la forma de onda del sonido que se está reproduciendo en tiempo real.
-*   **⏯️ Controles de Reproducción:** Funciones de Play/Stop y control de volumen principal.
-*   **🏃‍♂️ Reproducción en Segundo Plano:** Gracias al uso de un `Service`, la reproducción continúa aunque la aplicación no esté en primer plano.
+* **🎶 Selección de Frecuencias**:
+  * **Ondas Binaurales**: Delta (1-4 Hz), Theta (4-8 Hz), Alpha (8-13 Hz), Beta (13-30 Hz) y Gamma (30-100 Hz).
+  * **Frecuencias Solfeggio**: 174 Hz, 285 Hz, 396 Hz, 417 Hz, 528 Hz ("Frecuencia del Amor") y 639 Hz.
+* **ℹ️ Información Detallada**: Diálogo explicativo con beneficios científicos y de relajación para cada frecuencia.
+* **🍃 Mezclador de Ambiente**: Pistas relajantes superponibles de lluvia/truenos, fogata y bosque con regulación independiente.
+* **⏱️ Temporizador con Fundido Suave**: Opciones de sesión de 5m, 10m, 30m, 1h o sin límite con *Fade-Out* progresivo de 5 segundos.
+* **⏯️ Reproducción en Segundo Plano**: Servicio de primer plano (`Foreground Service`) persistente que continúa funcionando al apagar la pantalla o minimizar la app.
+
+---
 
 ## 🛠️ Tecnologías Utilizadas
 
-*   **Lenguaje:** Kotlin
-*   **Arquitectura de UI:** View Binding para una interacción segura y eficiente con las vistas.
-*   **Componentes de Android Jetpack:** `AppCompatActivity`, `Service`, `BroadcastReceiver`.
-*   **Audio:** `AudioTrack` para la generación de las ondas de audio en tiempo real.
+* **Lenguaje**: Kotlin 2.0
+* **UI**: Material Components 3, View Binding, Custom Vector Graphics.
+* **Audio Engine**: Android `AudioTrack` para síntesis en tiempo real de ondas senoidales estéreo, `MediaPlayer` para ambiente.
+* **Arquitectura**: `Service` en primer plano con enlace local (`Binder`) e IPC optimizado.
 
 ---
