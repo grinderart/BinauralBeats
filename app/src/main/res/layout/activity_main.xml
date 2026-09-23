@@ -122,7 +122,7 @@
                         app:hintTextColor="#448AFF"
                         android:textColorHint="#90A4AE">
 
-                        <AutoCompleteTextView
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/categoryAutoCompleteTextView"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -153,7 +153,7 @@
                             app:hintTextColor="#448AFF"
                             android:textColorHint="#90A4AE">
 
-                            <AutoCompleteTextView
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/frequencyAutoCompleteTextView"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -189,7 +189,7 @@
                         app:hintTextColor="#448AFF"
                         android:textColorHint="#90A4AE">
 
-                        <AutoCompleteTextView
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/timerAutoCompleteTextView"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"

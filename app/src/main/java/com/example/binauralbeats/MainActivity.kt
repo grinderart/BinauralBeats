@@ -126,7 +126,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMenus() {
-        binding.categoryAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, frequencies.keys.toTypedArray()))
+        val categories = frequencies.keys.toTypedArray()
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categories)
+        binding.categoryAutoCompleteTextView.setAdapter(categoryAdapter)
+
+        // Seleccionar la primera categoría por defecto
+        val initialCategory = categories.first()
+        binding.categoryAutoCompleteTextView.setText(initialCategory, false)
+        updateFrequencyMenu(initialCategory)
+
         binding.categoryAutoCompleteTextView.setOnItemClickListener { parent, _, position, _ ->
             val selectedCategory = parent.getItemAtPosition(position) as String
             updateFrequencyMenu(selectedCategory)
@@ -138,13 +146,15 @@ class MainActivity : AppCompatActivity() {
             updateWaveColorForFrequency(selectedFrequency)
         }
 
-        binding.timerAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, timerOptions.keys.toTypedArray()))
+        val timerAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, timerOptions.keys.toTypedArray())
+        binding.timerAutoCompleteTextView.setAdapter(timerAdapter)
         binding.timerAutoCompleteTextView.setText(timerOptions.keys.first(), false)
     }
 
     private fun updateFrequencyMenu(category: String) {
         val frequencyNames = frequencies[category]?.keys?.toTypedArray() ?: return
-        binding.frequencyAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, frequencyNames))
+        val frequencyAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, frequencyNames)
+        binding.frequencyAutoCompleteTextView.setAdapter(frequencyAdapter)
     }
 
     private fun updateWaveColorForFrequency(frequencyName: String) {
@@ -165,15 +175,21 @@ class MainActivity : AppCompatActivity() {
             val frequencyName = binding.frequencyAutoCompleteTextView.text.toString()
             val timerSelection = binding.timerAutoCompleteTextView.text.toString()
 
-            if (category.isNotEmpty() && frequencyName.isNotEmpty() && isBound) {
+            if (category.isNotEmpty() && frequencyName.isNotEmpty()) {
                 val frequencyData = frequencies[category]?.get(frequencyName)
                 val durationMinutes = timerOptions[timerSelection] ?: 0L
                 val durationMillis = TimeUnit.MINUTES.toMillis(durationMinutes)
 
                 if (frequencyData != null) {
+                    val serviceIntent = Intent(this, PlaybackService::class.java)
+                    startService(serviceIntent)
+
+                    if (!isBound) {
+                        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+                    }
+
                     updateWaveColorForFrequency(frequencyName)
                     val (baseFreq, binauralFreq) = frequencyData
-                    startService(Intent(this, PlaybackService::class.java))
                     playbackService?.playFrequency(baseFreq, binauralFreq, frequencyName, durationMillis)
                     binding.statusTextView.text = "Reproduciendo: $frequencyName"
                 }
@@ -197,7 +213,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Ambient Sound Controls
+        // Controles de sonido ambiental
         binding.rainSoundButton.setOnClickListener {
             handleAmbientButtonClick(R.raw.rainthunder, binding.rainSoundButton)
         }
@@ -249,7 +265,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleAmbientButtonClick(soundResId: Int, button: ImageView) {
-        if (!isBound) return
+        val serviceIntent = Intent(this, PlaybackService::class.java)
+        startService(serviceIntent)
+
+        if (!isBound) {
+            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+
         playbackService?.toggleAmbientSound(soundResId)
 
         if (activeAmbientSounds.contains(soundResId)) {

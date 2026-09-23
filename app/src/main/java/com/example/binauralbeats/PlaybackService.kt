@@ -35,9 +35,13 @@ class PlaybackService : Service() {
 
     // Volúmenes independientes por cada pista ambiental
     private val ambientPlayers = mutableMapOf<Int, MediaPlayer>()
-    private val ambientVolumes = mutableMapOf<Int, Float>()
+    private val ambientVolumes = mutableMapOf(
+        R.raw.rainthunder to 0.5f,
+        R.raw.fogata to 0.5f,
+        R.raw.forest to 0.5f
+    )
 
-    // Visualizer Listener directo (reemplaza IPC Broadcasts masivos)
+    // Visualizer Listener directo (0 overhead IPC)
     private var visualizerListener: VisualizerListener? = null
 
     // --- Variables de estado ---
@@ -116,7 +120,7 @@ class PlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("Selecciona una frecuencia")
+        val notification = createNotification("Servicio activo")
         startForeground(NOTIFICATION_ID, notification)
         return START_NOT_STICKY
     }
@@ -154,6 +158,8 @@ class PlaybackService : Service() {
     }
 
     fun toggleAmbientSound(soundResId: Int) {
+        if (!requestAudioFocus()) return
+
         if (ambientPlayers.containsKey(soundResId)) {
             ambientPlayers[soundResId]?.stop()
             ambientPlayers[soundResId]?.release()
@@ -161,15 +167,24 @@ class PlaybackService : Service() {
         } else {
             try {
                 val volume = ambientVolumes[soundResId] ?: 0.5f
-                val mediaPlayer = MediaPlayer.create(this, soundResId).apply {
-                    isLooping = true
-                    setVolume(volume, volume)
-                    start()
+                val mediaPlayer = MediaPlayer.create(this, soundResId)
+                if (mediaPlayer != null) {
+                    mediaPlayer.isLooping = true
+                    mediaPlayer.setVolume(volume, volume)
+                    mediaPlayer.start()
+                    ambientPlayers[soundResId] = mediaPlayer
                 }
-                ambientPlayers[soundResId] = mediaPlayer
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        if (isPlayingFrequency) {
+            updateNotification("Reproduciendo: $lastFrequencyName")
+        } else if (ambientPlayers.isNotEmpty()) {
+            updateNotification("Sonido ambiental activo")
+        } else {
+            abandonAudioFocus()
         }
     }
 
@@ -182,16 +197,14 @@ class PlaybackService : Service() {
         ambientPlayers[soundResId]?.setVolume(volume, volume)
     }
 
-    fun setAllAmbientVolumes(volume: Float) {
-        ambientPlayers.keys.forEach { soundResId ->
-            setAmbientSoundVolume(soundResId, volume)
-        }
-    }
-
     private fun stopAllAmbientSounds() {
         ambientPlayers.values.forEach { player ->
-            player.stop()
-            player.release()
+            try {
+                if (player.isPlaying) player.stop()
+                player.release()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         ambientPlayers.clear()
     }
