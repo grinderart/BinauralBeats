@@ -2,5 +2,21 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="button_activated">#FF0000FF</color>
+
+    <!-- Superficie y tarjetas Material 3 Dark -->
+    <color name="bg_dark">#12141C</color>
+    <color name="card_dark">#1E2230</color>
+
+    <!-- Colores Dinámicos de Ondas/Frecuencias -->
+    <color name="wave_delta">#448AFF</color>     <!-- Azul Místico -->
+    <color name="wave_theta">#B388FF</color>     <!-- Púrpura Meditación -->
+    <color name="wave_alpha">#00E676</color>     <!-- Verde Esmeralda -->
+    <color name="wave_beta">#FFD700</color>      <!-- Dorado Concentración -->
+    <color name="wave_gamma">#00E5FF</color>     <!-- Cían Energía -->
+    <color name="wave_solfeggio">#FF4081</color>  <!-- Magenta Sanación -->
+
+    <!-- Estados activos -->
+    <color name="button_activated">#00E676</color>
+    <color name="card_stroke_active">#00E676</color>
+    <color name="card_stroke_inactive">#2C3246</color>
 </resources>

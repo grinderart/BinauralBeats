@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.widget.ArrayAdapter
 import android.widget.ImageView
-import android.widget.SeekBar
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -21,6 +20,12 @@ class MainActivity : AppCompatActivity() {
     private var isBound = false
     private val activeAmbientSounds = mutableSetOf<Int>()
 
+    // Visualizer Listener directo (0 overhead IPC)
+    private val visualizerListener = object : PlaybackService.VisualizerListener {
+        override fun onWaveformUpdate(waveform: ShortArray) {
+            binding.visualizerView.updateVisualizer(waveform)
+        }
+    }
 
     private val appStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -28,12 +33,6 @@ class MainActivity : AppCompatActivity() {
                 PlaybackService.ACTION_TIMER_UPDATE -> {
                     val timeRemaining = intent.getLongExtra(PlaybackService.EXTRA_TIME_REMAINING, 0)
                     updateCountdownUI(timeRemaining)
-                }
-                PlaybackService.ACTION_WAVEFORM_UPDATE -> {
-                    val waveform = intent.getShortArrayExtra(PlaybackService.EXTRA_WAVEFORM)
-                    if (waveform != null) {
-                        binding.visualizerView.updateVisualizer(waveform)
-                    }
                 }
             }
         }
@@ -44,8 +43,11 @@ class MainActivity : AppCompatActivity() {
             val binder = service as PlaybackService.LocalBinder
             playbackService = binder.getService()
             isBound = true
+            playbackService?.setVisualizerListener(visualizerListener)
         }
+
         override fun onServiceDisconnected(arg0: ComponentName) {
+            playbackService?.setVisualizerListener(null)
             isBound = false
             playbackService = null
         }
@@ -53,12 +55,31 @@ class MainActivity : AppCompatActivity() {
 
     // --- Datos de la App ---
     private val frequencies = mapOf(
-        "Ondas Binaurales" to mapOf("Delta (1-4 Hz)" to Pair(100.0, 2.0), "Theta (4-8 Hz)" to Pair(120.0, 6.0), "Alpha (8-13 Hz)" to Pair(150.0, 10.0), "Beta (13-30 Hz)" to Pair(180.0, 20.0), "Gamma (30-100 Hz)" to Pair(200.0, 40.0)),
-        "Frecuencias Solfeggio" to mapOf("174 Hz" to Pair(174.0, 0.0), "285 Hz" to Pair(285.0, 0.0), "396 Hz" to Pair(396.0, 0.0), "417 Hz" to Pair(417.0, 0.0), "528 Hz" to Pair(528.0, 0.0), "639 Hz" to Pair(639.0, 0.0))
+        "Ondas Binaurales" to mapOf(
+            "Delta (1-4 Hz)" to Pair(100.0, 2.0),
+            "Theta (4-8 Hz)" to Pair(120.0, 6.0),
+            "Alpha (8-13 Hz)" to Pair(150.0, 10.0),
+            "Beta (13-30 Hz)" to Pair(180.0, 20.0),
+            "Gamma (30-100 Hz)" to Pair(200.0, 40.0)
+        ),
+        "Frecuencias Solfeggio" to mapOf(
+            "174 Hz" to Pair(174.0, 0.0),
+            "285 Hz" to Pair(285.0, 0.0),
+            "396 Hz" to Pair(396.0, 0.0),
+            "417 Hz" to Pair(417.0, 0.0),
+            "528 Hz" to Pair(528.0, 0.0),
+            "639 Hz" to Pair(639.0, 0.0)
+        )
     )
-    private val timerOptions = mapOf("Sin límite" to 0L, "5 minutos" to 5L, "10 minutos" to 10L, "30 minutos" to 30L, "1 hora" to 60L)
 
-    // NUEVO: Mapa con las descripciones de cada frecuencia
+    private val timerOptions = mapOf(
+        "Sin límite" to 0L,
+        "5 minutos" to 5L,
+        "10 minutos" to 10L,
+        "30 minutos" to 30L,
+        "1 hora" to 60L
+    )
+
     private val frequencyDescriptions = mapOf(
         "Delta (1-4 Hz)" to "Asociadas con el sueño profundo sin sueños y la sanación. Promueven la regeneración del cuerpo.",
         "Theta (4-8 Hz)" to "Vinculadas a la meditación profunda, la creatividad y el sueño REM. Ayudan a mejorar la intuición.",
@@ -69,7 +90,7 @@ class MainActivity : AppCompatActivity() {
         "285 Hz" to "Frecuencia que ayuda a la sanación de tejidos y órganos, devolviéndolos a su estado original. Influye en los campos de energía.",
         "396 Hz" to "Libera del miedo y la culpa. Ayuda a eliminar bloqueos subconscientes, creencias negativas y traumas.",
         "417 Hz" to "Facilita el cambio y la transmutación. Limpia experiencias traumáticas y deshace situaciones negativas.",
-        "528 Hz" to "Conocida como la '''frecuencia del amor''' o de los milagros. Se asocia con la reparación del ADN, la claridad mental y la paz interior.",
+        "528 Hz" to "Conocida como la 'frecuencia del amor' o de los milagros. Se asocia con la reparación del ADN, la claridad mental y la paz interior.",
         "639 Hz" to "Mejora la conexión, las relaciones y la comunicación. Fomenta la comprensión, la tolerancia y el amor."
     )
 
@@ -89,7 +110,6 @@ class MainActivity : AppCompatActivity() {
         }
         val intentFilter = IntentFilter().apply {
             addAction(PlaybackService.ACTION_TIMER_UPDATE)
-            addAction(PlaybackService.ACTION_WAVEFORM_UPDATE)
         }
 
         ContextCompat.registerReceiver(this, appStateReceiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -98,6 +118,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         if (isBound) {
+            playbackService?.setVisualizerListener(null)
             unbindService(serviceConnection)
             isBound = false
         }
@@ -107,9 +128,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupMenus() {
         binding.categoryAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, frequencies.keys.toTypedArray()))
         binding.categoryAutoCompleteTextView.setOnItemClickListener { parent, _, position, _ ->
-            updateFrequencyMenu(parent.getItemAtPosition(position) as String)
+            val selectedCategory = parent.getItemAtPosition(position) as String
+            updateFrequencyMenu(selectedCategory)
             binding.frequencyAutoCompleteTextView.setText("", false)
         }
+
+        binding.frequencyAutoCompleteTextView.setOnItemClickListener { parent, _, position, _ ->
+            val selectedFrequency = parent.getItemAtPosition(position) as String
+            updateWaveColorForFrequency(selectedFrequency)
+        }
+
         binding.timerAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, timerOptions.keys.toTypedArray()))
         binding.timerAutoCompleteTextView.setText(timerOptions.keys.first(), false)
     }
@@ -117,6 +145,18 @@ class MainActivity : AppCompatActivity() {
     private fun updateFrequencyMenu(category: String) {
         val frequencyNames = frequencies[category]?.keys?.toTypedArray() ?: return
         binding.frequencyAutoCompleteTextView.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, frequencyNames))
+    }
+
+    private fun updateWaveColorForFrequency(frequencyName: String) {
+        val colorRes = when {
+            frequencyName.contains("Delta", ignoreCase = true) -> R.color.wave_delta
+            frequencyName.contains("Theta", ignoreCase = true) -> R.color.wave_theta
+            frequencyName.contains("Alpha", ignoreCase = true) -> R.color.wave_alpha
+            frequencyName.contains("Beta", ignoreCase = true) -> R.color.wave_beta
+            frequencyName.contains("Gamma", ignoreCase = true) -> R.color.wave_gamma
+            else -> R.color.wave_solfeggio
+        }
+        binding.visualizerView.setWaveColor(ContextCompat.getColor(this, colorRes))
     }
 
     private fun setupControls() {
@@ -131,6 +171,7 @@ class MainActivity : AppCompatActivity() {
                 val durationMillis = TimeUnit.MINUTES.toMillis(durationMinutes)
 
                 if (frequencyData != null) {
+                    updateWaveColorForFrequency(frequencyName)
                     val (baseFreq, binauralFreq) = frequencyData
                     startService(Intent(this, PlaybackService::class.java))
                     playbackService?.playFrequency(baseFreq, binauralFreq, frequencyName, durationMillis)
@@ -144,22 +185,19 @@ class MainActivity : AppCompatActivity() {
                 playbackService?.stop()
             }
             binding.statusTextView.text = "Estado: Detenido"
+            binding.visualizerView.clearVisualizer()
             updateCountdownUI(0)
             activeAmbientSounds.clear()
             updateAllAmbientButtonUI()
         }
 
-        binding.volumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser && isBound) {
-                    val volume = progress / 100f
-                    playbackService?.setFrequencyVolume(volume)
-                }
+        binding.volumeSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser && isBound) {
+                playbackService?.setFrequencyVolume(value / 100f)
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
 
+        // Ambient Sound Controls
         binding.rainSoundButton.setOnClickListener {
             handleAmbientButtonClick(R.raw.rainthunder, binding.rainSoundButton)
         }
@@ -170,16 +208,23 @@ class MainActivity : AppCompatActivity() {
             handleAmbientButtonClick(R.raw.forest, binding.forestSoundButton)
         }
 
-        binding.ambientVolumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser && isBound) {
-                    val volume = progress / 100f
-                    playbackService?.setAmbientVolume(volume)
-                }
+        binding.rainVolumeSlider.addOnChangeListener { _, value, _ ->
+            if (isBound) {
+                playbackService?.setAmbientSoundVolume(R.raw.rainthunder, value / 100f)
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
+
+        binding.fireVolumeSlider.addOnChangeListener { _, value, _ ->
+            if (isBound) {
+                playbackService?.setAmbientSoundVolume(R.raw.fogata, value / 100f)
+            }
+        }
+
+        binding.forestVolumeSlider.addOnChangeListener { _, value, _ ->
+            if (isBound) {
+                playbackService?.setAmbientSoundVolume(R.raw.forest, value / 100f)
+            }
+        }
 
         binding.infoButton.setOnClickListener {
             showFrequencyInfo()
@@ -189,7 +234,6 @@ class MainActivity : AppCompatActivity() {
     private fun showFrequencyInfo() {
         val selectedFrequency = binding.frequencyAutoCompleteTextView.text.toString()
         if (selectedFrequency.isEmpty()) {
-            // No hacer nada si no hay una frecuencia seleccionada
             return
         }
 

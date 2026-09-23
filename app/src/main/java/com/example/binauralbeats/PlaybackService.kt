@@ -23,13 +23,22 @@ import kotlin.math.sin
 
 class PlaybackService : Service() {
 
+    interface VisualizerListener {
+        fun onWaveformUpdate(waveform: ShortArray)
+    }
+
     // --- Reproductores ---
     private var audioTrack: AudioTrack? = null
     private var isPlayingFrequency = false
     private var frequencyPlaybackThread: Thread? = null
     private var currentVolume: Float = 1.0f
+
+    // Volúmenes independientes por cada pista ambiental
     private val ambientPlayers = mutableMapOf<Int, MediaPlayer>()
-    private var ambientVolume: Float = 0.5f
+    private val ambientVolumes = mutableMapOf<Int, Float>()
+
+    // Visualizer Listener directo (reemplaza IPC Broadcasts masivos)
+    private var visualizerListener: VisualizerListener? = null
 
     // --- Variables de estado ---
     private var countDownTimer: CountDownTimer? = null
@@ -41,7 +50,7 @@ class PlaybackService : Service() {
     private var lastBinauralFreq: Double = 0.0
     private var lastFrequencyName: String = ""
 
-    // --- NUEVO: Temporizador para el fundido de salida ---
+    // Temporizador para el fundido de salida
     private var fadeOutTimer: CountDownTimer? = null
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -67,19 +76,25 @@ class PlaybackService : Service() {
     }
 
     private val binder = LocalBinder()
-    inner class LocalBinder : Binder() { fun getService(): PlaybackService = this@PlaybackService }
+    inner class LocalBinder : Binder() {
+        fun getService(): PlaybackService = this@PlaybackService
+    }
+
     override fun onBind(intent: Intent): IBinder = binder
+
+    fun setVisualizerListener(listener: VisualizerListener?) {
+        this.visualizerListener = listener
+    }
 
     companion object {
         private const val CHANNEL_ID = "PlaybackServiceChannel"
         private const val NOTIFICATION_ID = 1
         const val ACTION_TIMER_UPDATE = "com.example.binauralbeats.TIMER_UPDATE"
         const val EXTRA_TIME_REMAINING = "TIME_REMAINING"
-        const val ACTION_WAVEFORM_UPDATE = "com.example.binauralbeats.WAVEFORM_UPDATE"
-        const val EXTRA_WAVEFORM = "WAVEFORM"
-        // NUEVO: Constantes para el fundido
+
         private const val FADE_OUT_DURATION = 5000L // 5 segundos
         private const val FADE_OUT_INTERVAL = 50L // Actualizar volumen cada 50ms
+        private const val FRAME_INTERVAL_MS = 25L // ~40 FPS para el visualizer sin sobrecargar la UI
     }
 
     override fun onCreate() {
@@ -110,7 +125,7 @@ class PlaybackService : Service() {
         if (!requestAudioFocus()) return
         if (isPlayingFrequency) stopFrequencyPlayback()
 
-        fadeOutTimer?.cancel() // Cancelar cualquier fundido anterior
+        fadeOutTimer?.cancel()
 
         lastBaseFreq = baseFreq
         lastBinauralFreq = binauralFreq
@@ -125,7 +140,7 @@ class PlaybackService : Service() {
     }
 
     fun stop() {
-        fadeOutTimer?.cancel() // Asegurarse de cancelar el fundido si se pulsa stop
+        fadeOutTimer?.cancel()
         stopFrequencyPlayback()
         stopAllAmbientSounds()
         abandonAudioFocus()
@@ -145,9 +160,10 @@ class PlaybackService : Service() {
             ambientPlayers.remove(soundResId)
         } else {
             try {
+                val volume = ambientVolumes[soundResId] ?: 0.5f
                 val mediaPlayer = MediaPlayer.create(this, soundResId).apply {
                     isLooping = true
-                    setVolume(ambientVolume, ambientVolume)
+                    setVolume(volume, volume)
                     start()
                 }
                 ambientPlayers[soundResId] = mediaPlayer
@@ -157,10 +173,18 @@ class PlaybackService : Service() {
         }
     }
 
-    fun setAmbientVolume(volume: Float) {
-        ambientVolume = volume
-        ambientPlayers.values.forEach { player ->
-            player.setVolume(ambientVolume, ambientVolume)
+    fun isAmbientSoundPlaying(soundResId: Int): Boolean {
+        return ambientPlayers.containsKey(soundResId)
+    }
+
+    fun setAmbientSoundVolume(soundResId: Int, volume: Float) {
+        ambientVolumes[soundResId] = volume
+        ambientPlayers[soundResId]?.setVolume(volume, volume)
+    }
+
+    fun setAllAmbientVolumes(volume: Float) {
+        ambientPlayers.keys.forEach { soundResId ->
+            setAmbientSoundVolume(soundResId, volume)
         }
     }
 
@@ -183,7 +207,7 @@ class PlaybackService : Service() {
     }
 
     private fun abandonAudioFocus() {
-        if (ambientPlayers.isEmpty()) {
+        if (ambientPlayers.isEmpty() && !isPlayingFrequency) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
             } else {
@@ -234,17 +258,30 @@ class PlaybackService : Service() {
             val rightFreq = lastBaseFreq + lastBinauralFreq
             var angleLeft = 0.0
             var angleRight = 0.0
+            val twoPi = 2.0 * Math.PI
+
+            var lastFrameTime = 0L
+
             audioTrack?.play()
             while (isPlayingFrequency) {
                 for (i in 0 until bufferSize step 2) {
                     buffer[i] = (sin(angleLeft) * Short.MAX_VALUE).toInt().toShort()
                     buffer[i + 1] = (sin(angleRight) * Short.MAX_VALUE).toInt().toShort()
-                    angleLeft += 2 * Math.PI * leftFreq / sampleRate
-                    angleRight += 2 * Math.PI * rightFreq / sampleRate
+
+                    angleLeft += twoPi * leftFreq / sampleRate
+                    if (angleLeft >= twoPi) angleLeft %= twoPi
+
+                    angleRight += twoPi * rightFreq / sampleRate
+                    if (angleRight >= twoPi) angleRight %= twoPi
                 }
                 audioTrack?.write(buffer, 0, bufferSize)
 
-                broadcastWaveformUpdate(buffer)
+                // Throttled UI notification directly to bound listener
+                val now = System.currentTimeMillis()
+                if (now - lastFrameTime >= FRAME_INTERVAL_MS) {
+                    lastFrameTime = now
+                    visualizerListener?.onWaveformUpdate(buffer)
+                }
             }
             audioTrack?.stop()
             audioTrack?.release()
@@ -259,7 +296,6 @@ class PlaybackService : Service() {
                 broadcastTimeUpdate(timeRemainingInMillis)
             }
             override fun onFinish() {
-                // CORRECCIÓN: En lugar de parar de golpe, iniciamos el fundido de salida
                 startFadeOut()
             }
         }.start()
@@ -271,23 +307,16 @@ class PlaybackService : Service() {
         broadcastTimeUpdate(0)
     }
 
-    // --- NUEVO: Lógica para el fundido de salida ---
     private fun startFadeOut() {
         val initialFrequencyVolume = currentVolume
-        val initialAmbientVolume = ambientVolume
 
         fadeOutTimer = object : CountDownTimer(FADE_OUT_DURATION, FADE_OUT_INTERVAL) {
             override fun onTick(millisUntilFinished: Long) {
-                // Calcular la nueva opacidad del volumen (de 1.0 a 0.0)
                 val volumeMultiplier = millisUntilFinished.toFloat() / FADE_OUT_DURATION
-
-                // Aplicar el nuevo volumen a todos los reproductores
                 setFrequencyVolume(initialFrequencyVolume * volumeMultiplier)
-                setAmbientVolume(initialAmbientVolume * volumeMultiplier)
             }
 
             override fun onFinish() {
-                // Cuando el fundido termina, paramos todo de forma definitiva
                 stop()
             }
         }.start()
@@ -296,12 +325,6 @@ class PlaybackService : Service() {
     private fun broadcastTimeUpdate(timeRemaining: Long) {
         val intent = Intent(ACTION_TIMER_UPDATE)
         intent.putExtra(EXTRA_TIME_REMAINING, timeRemaining)
-        sendBroadcast(intent)
-    }
-
-    private fun broadcastWaveformUpdate(waveform: ShortArray) {
-        val intent = Intent(ACTION_WAVEFORM_UPDATE)
-        intent.putExtra(EXTRA_WAVEFORM, waveform)
         sendBroadcast(intent)
     }
 
@@ -332,5 +355,6 @@ class PlaybackService : Service() {
         stopFrequencyPlayback()
         stopAllAmbientSounds()
         abandonAudioFocus()
+        visualizerListener = null
     }
 }
